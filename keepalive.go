@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 	//"io/ioutil"
 	"bytes"
 	"encoding/binary"
@@ -9,10 +11,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
-func EncodeHeartBeatRequest() *bytes.Buffer {
+const (
+	Sync_Cycle_Time = 30
+)
+
+func EncodeHeartBeatRequest(curConnNum int) *bytes.Buffer {
 	buf := new(bytes.Buffer)
 	var hbeatreq HeartbeatRequest
 	hbeatreq.Length = uint32(binary.Size(hbeatreq))
@@ -88,7 +93,6 @@ func get_internal() {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		os.Stderr.WriteString("Oops:" + err.Error())
-		os.Exit(1)
 	}
 	for _, a := range addrs {
 		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
@@ -104,36 +108,85 @@ func sendKeepAliveMsg(conn net.Conn) int {
 	return 0
 }
 
-func sendMsg(conn net.Conn, msg []byte) {
+func sendMsg(conn net.Conn, msg []byte) error {
 	var buf []byte
 	buf = make([]byte, 10, 10)
 	_, err := conn.Write(buf)
 	if err != nil {
 		fmt.Println("Error reading:", err.Error())
-		return
+		return err
 	}
+	return nil
 }
 
-func connectServer(host string, port uint16) {
-	server := "127.0.0.1:8080"
-
+func connectServer(host string, port uint16) (net.Conn, error) {
+	server := fmt.Sprintf("%s:%d", host, port)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", server)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		os.Exit(1)
+		fmt.Println("Fatal error: ", err)
 	}
+	fmt.Println("tcpaddr:", tcpAddr.IP, tcpAddr.Port)
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		fmt.Println("Fatal error: ", err)
+		return conn, err
+	}
+	return conn, nil
 
-	for {
-		conn, err := net.DialTCP("tcp", nil, tcpAddr)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-			os.Exit(1)
+}
+
+func KeepAlive() {
+	reqChan := make(chan []byte)
+	//	resChan := make(chan []byte)
+	connChan := make(chan net.Conn)
+	piplineChan := make(chan int)
+	//Conn Producer
+	go func() {
+		for {
+			//if need reconnect
+			<-piplineChan
+			conn, err := connectServer("172.16.10.208", 22)
+			if err != nil {
+				time.Sleep( /*rand.Intn(10) * time.Second*/ 1e9)
+				rand.Intn(10)
+				time.Sleep(10 * time.Second)
+				fmt.Println("Fatal error:", err)
+				//need reconnect
+				piplineChan <- 1
+			} else {
+				//connect success
+				connChan <- conn
+			}
 		}
-		defer conn.Close()
-		fmt.Println("Connect server success!")
-		for ret := 0; ret == 0; {
-			ret = sendKeepAliveMsg(conn)
+	}()
+	//Msg Producer
+	go func() {
+		for {
+			buf := EncodeHeartBeatRequest(curConnNum)
+			fmt.Println(buf)
+			reqChan <- buf.Bytes()
+			time.Sleep(Sync_Cycle_Time * time.Second)
 		}
-		time.Sleep(3 * 1e9)
-	}
+	}()
+
+	//Msg Consumer (send reqest and recive response)
+	go func() {
+		for conn := range connChan {
+			buf := make([]byte, 1024)
+			//send
+
+			//recv
+			n, err := conn.Read(buf)
+			if err != nil {
+				conn.Close()
+				//need reconnect
+				<-piplineChan
+			}
+			fmt.Println(n)
+		}
+	}()
+
+	go func() {
+
+	}()
 }

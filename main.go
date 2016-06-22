@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	//"io/ioutil"
+	"math/rand"
 
 	"log"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 
 const (
 	MaxConnNum = 5
-	//MaxConnNum
 )
 
 var ServerPort int
@@ -32,7 +32,15 @@ func httpServer(addr string) {
 }
 
 func main() {
-	EncodeHeartBeatRequest()
+	buf := EncodeHeartBeatRequest(curConnNum)
+	fmt.Println(buf.Bytes())
+	go KeepAlive()
+	go BandwidthServer()
+	for i := 0; i < 5; i++ {
+		fmt.Printf("%d ", rand.Int()%16)
+	}
+	fmt.Println()
+
 	//init Bandwidth test server and start listen
 	//go BandwidthServer()
 

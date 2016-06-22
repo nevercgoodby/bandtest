@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+var curConnNum int = 0
+
 /* test server Goroutine */
 func BandwidthTest(conn net.Conn) {
 	defer conn.Close()
@@ -18,11 +20,13 @@ func BandwidthTest(conn net.Conn) {
 			return
 		}
 		//send reply
-		_, err = conn.Write(buf)
-		if err != nil {
-			fmt.Println("Error send reply:", err.Error())
-			return
-		}
+		/*
+			_, err = conn.Write(buf)
+			if err != nil {
+				fmt.Println("Error send reply:", err.Error())
+				return
+			}
+		*/
 	}
 }
 
@@ -37,7 +41,6 @@ func BandwidthServer() {
 
 	fmt.Printf("running ...\n")
 
-	var curConnNum int = 0
 	connChan := make(chan net.Conn)
 	connChangChan := make(chan int)
 
@@ -48,8 +51,8 @@ func BandwidthServer() {
 	}()
 
 	go func() {
-		for _ = range time.Tick(1e9) {
-			fmt.Printf("cur conn num: %v\n", curConnNum)
+		for _ = range time.Tick(1e9 * 30) {
+			fmt.Printf("Cur conn num: %v\n", curConnNum)
 		}
 	}()
 	for i := 0; i < MaxConnNum; i++ {
