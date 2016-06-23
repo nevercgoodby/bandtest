@@ -2,15 +2,12 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
+	//"math/rand"
 	"time"
 	//"io/ioutil"
 	"bytes"
 	"encoding/binary"
 	"net"
-	"os"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -23,6 +20,8 @@ func EncodeHeartBeatRequest(curConnNum int) *bytes.Buffer {
 	hbeatreq.Length = uint32(binary.Size(hbeatreq))
 	hbeatreq.Cmd = uint32(0x00000024)
 	hbeatreq.Seq = uint32(1)
+	hbeatreq.Loads[6] = uint16(curConnNum)
+	hbeatreq.Ports[6] = uint16(BandWidthPort)
 	binary.Write(buf, binary.BigEndian, hbeatreq)
 	// var msg []byte
 	// msg = buf.Bytes()
@@ -41,68 +40,6 @@ func DecodeHeartBeatResponse(buf bytes.Buffer) int {
 	return 0
 }
 
-// Convert uint to net.IP
-func inet_ntoa(ipnr int64) net.IP {
-	var bytes [4]byte
-	bytes[0] = byte(ipnr & 0xFF)
-	bytes[1] = byte((ipnr >> 8) & 0xFF)
-	bytes[2] = byte((ipnr >> 16) & 0xFF)
-	bytes[3] = byte((ipnr >> 24) & 0xFF)
-
-	return net.IPv4(bytes[3], bytes[2], bytes[1], bytes[0])
-}
-
-// Convert net.IP to int32
-func inet_aton2(ipnr string) int32 {
-	bits := strings.Split(ipnr, ".")
-
-	b0, _ := strconv.Atoi(bits[0])
-	b1, _ := strconv.Atoi(bits[1])
-	b2, _ := strconv.Atoi(bits[2])
-	b3, _ := strconv.Atoi(bits[3])
-
-	var sum int32
-
-	sum += int32(b0) << 24
-	sum += int32(b1) << 16
-	sum += int32(b2) << 8
-	sum += int32(b3)
-
-	return sum
-}
-
-func inet_aton(ipnr net.IP) int32 {
-	bits := strings.Split(ipnr.String(), ".")
-
-	b0, _ := strconv.Atoi(bits[0])
-	b1, _ := strconv.Atoi(bits[1])
-	b2, _ := strconv.Atoi(bits[2])
-	b3, _ := strconv.Atoi(bits[3])
-
-	var sum int32
-
-	sum += int32(b0) << 24
-	sum += int32(b1) << 16
-	sum += int32(b2) << 8
-	sum += int32(b3)
-
-	return sum
-}
-
-func get_internal() {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		os.Stderr.WriteString("Oops:" + err.Error())
-	}
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				os.Stdout.WriteString(ipnet.IP.String() + "\n")
-			}
-		}
-	}
-}
-
 func sendKeepAliveMsg(conn net.Conn) int {
 	conn.Write([]byte("a"))
 	return 0
@@ -118,8 +55,24 @@ func sendMsg(conn net.Conn, msg []byte) error {
 	}
 	return nil
 }
+func connectUnixServer(localpath string) (net.Conn, error) {
+	fmt.Println("Hi, I will connect!")
+	unixAddr, err := net.ResolveUnixAddr("unix", localpath)
+	if err != nil {
+		fmt.Println("Fatal error: ", err)
+	}
+	fmt.Println("unixaddr:", unixAddr)
+	uconn, err := net.DialUnix("unix", nil, unixAddr)
+	if err != nil {
+		fmt.Println("Fatal error: ", err)
+		uconn.Close()
+		return uconn, err
+	}
+	return uconn, nil
+}
 
 func connectServer(host string, port uint16) (net.Conn, error) {
+	fmt.Println("Hi, I will connect!")
 	server := fmt.Sprintf("%s:%d", host, port)
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", server)
 	if err != nil {
@@ -139,54 +92,77 @@ func KeepAlive() {
 	reqChan := make(chan []byte)
 	//	resChan := make(chan []byte)
 	connChan := make(chan net.Conn)
-	piplineChan := make(chan int)
+	pipelineChan := make(chan int)
 	//Conn Producer
 	go func() {
 		for {
 			//if need reconnect
-			<-piplineChan
-			conn, err := connectServer("172.16.10.208", 22)
+			<-pipelineChan
+			conn, err := connectServer("172.16.10.208", 9869)
 			if err != nil {
-				time.Sleep( /*rand.Intn(10) * time.Second*/ 1e9)
-				rand.Intn(10)
-				time.Sleep(10 * time.Second)
-				fmt.Println("Fatal error:", err)
+				time.Sleep( /*rand.Intn(10) * time.Second*/ 10 * 1e9)
+				fmt.Println("Fatal error c:", err)
 				//need reconnect
-				piplineChan <- 1
+				pipelineChan <- 1
 			} else {
 				//connect success
+
 				connChan <- conn
 			}
+			fmt.Println("Okay, I connected!")
 		}
+		fmt.Println("Connect cen goroutine Die!")
 	}()
 	//Msg Producer
 	go func() {
 		for {
 			buf := EncodeHeartBeatRequest(curConnNum)
-			fmt.Println(buf)
 			reqChan <- buf.Bytes()
-			time.Sleep(Sync_Cycle_Time * time.Second)
+			//time.Sleep(Sync_Cycle_Time * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	//Msg Consumer (send reqest and recive response)
 	go func() {
+		pipelineChan <- 1
+
 		for conn := range connChan {
-			buf := make([]byte, 1024)
-			//send
+			fmt.Println("conn Chan len:", len(connChan))
+			for msgBytes := range reqChan {
 
-			//recv
-			n, err := conn.Read(buf)
-			if err != nil {
-				conn.Close()
-				//need reconnect
-				<-piplineChan
+				//send
+				fmt.Println("send len:", len(msgBytes))
+				wn, err := conn.Write(msgBytes)
+				if err != nil {
+					conn.Close()
+					//need reconnect
+					fmt.Println("Error s, connection closed!")
+					pipelineChan <- 1
+					break
+				}
+				fmt.Println("Send status:", wn)
+				conn.SetReadDeadline((time.Now().Add(time.Second * 10)))
+
+				//recv
+				resBytes := make([]byte, 1024)
+				fmt.Println("Hi, I will Read response!")
+
+				//				select {
+				//					case rn, err := conn.Read(resBytes):
+				//					case
+				//				}
+				rn, err := conn.Read(resBytes)
+				if rn == 0 && err != nil {
+					conn.Close()
+					//need reconnect
+					fmt.Println("Read error! Read len:", rn, err)
+					pipelineChan <- 1
+					break
+				}
+				fmt.Println("######Recv status:", rn)
 			}
-			fmt.Println(n)
 		}
-	}()
-
-	go func() {
-
+		fmt.Println("Msg Send goruntine quit!")
 	}()
 }

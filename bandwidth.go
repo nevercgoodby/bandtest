@@ -8,12 +8,14 @@ import (
 )
 
 var curConnNum int = 0
+var BandWidthPort int = 8088
 
 /* test server Goroutine */
 func BandwidthTest(conn net.Conn) {
 	defer conn.Close()
-	buf := make([]byte, 10)
+	buf := make([]byte, 4096)
 	for {
+		conn.SetReadDeadline((time.Now().Add(time.Second * 10)))
 		_, err := conn.Read(buf)
 		if err != nil {
 			fmt.Println("Error reading:", err.Error())

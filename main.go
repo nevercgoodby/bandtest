@@ -33,6 +33,8 @@ func httpServer(addr string) {
 
 func main() {
 	buf := EncodeHeartBeatRequest(curConnNum)
+	pauseChan := make(chan int)
+
 	fmt.Println(buf.Bytes())
 	go KeepAlive()
 	go BandwidthServer()
@@ -40,6 +42,8 @@ func main() {
 		fmt.Printf("%d ", rand.Int()%16)
 	}
 	fmt.Println()
+	httpServer("127.0.0.1:8080")
+	<-pauseChan
 
 	//init Bandwidth test server and start listen
 	//go BandwidthServer()
