@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	//"math/rand"
 	"time"
 	//"io/ioutil"
@@ -89,7 +90,7 @@ func connectServer(host string, port uint16) (net.Conn, error) {
 }
 
 func KeepAlive() {
-	reqChan := make(chan []byte)
+	reqChan := make(chan *bytes.Buffer)
 	//	resChan := make(chan []byte)
 	connChan := make(chan net.Conn)
 	pipelineChan := make(chan int)
@@ -117,7 +118,7 @@ func KeepAlive() {
 	go func() {
 		for {
 			buf := EncodeHeartBeatRequest(curConnNum)
-			reqChan <- buf.Bytes()
+			reqChan <- buf
 			//time.Sleep(Sync_Cycle_Time * time.Second)
 			time.Sleep(1 * time.Second)
 		}
@@ -132,8 +133,9 @@ func KeepAlive() {
 			for msgBytes := range reqChan {
 
 				//send
-				fmt.Println("send len:", len(msgBytes))
-				wn, err := conn.Write(msgBytes)
+				fmt.Println("send len:", len(msgBytes.Bytes()))
+				wn, err := io.CopyN(conn, msgBytes, 176)
+				//wn, err := conn.Write(msgBytes)
 				if err != nil {
 					conn.Close()
 					//need reconnect
@@ -145,14 +147,18 @@ func KeepAlive() {
 				conn.SetReadDeadline((time.Now().Add(time.Second * 10)))
 
 				//recv
-				resBytes := make([]byte, 1024)
+				//resBytes := make([]byte, 1024)
+				buf := new(bytes.Buffer)
 				fmt.Println("Hi, I will Read response!")
 
 				//				select {
 				//					case rn, err := conn.Read(resBytes):
 				//					case
 				//				}
-				rn, err := conn.Read(resBytes)
+
+				//rn, err := conn.Read(resBytes)
+
+				rn, err := io.CopyN(buf, conn, 21)
 				if rn == 0 && err != nil {
 					conn.Close()
 					//need reconnect

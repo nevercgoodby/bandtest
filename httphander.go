@@ -26,7 +26,7 @@ func BandwidthHander(w http.ResponseWriter, r *http.Request) {
 	addr := strings.Split(r.Host, ":")
 	ip := addr[0]
 
-	http.Redirect(w, r, "http://"+ip+":"+"8080"+"/band/test/up", 302)
+	http.Redirect(w, r, "http://"+ip+":"+"8080"+"/band/test/up", http.StatusFound)
 	return
 }
 
