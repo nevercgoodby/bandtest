@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-var curConnNum int = 0
-var BandWidthPort int = 8088
-
 /* test server Goroutine */
 func BandwidthTest(conn net.Conn) {
 	defer conn.Close()

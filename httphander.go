@@ -67,7 +67,7 @@ func UploadApplyHander(w http.ResponseWriter, r *http.Request) {
 	binary.Write(buffer, binary.BigEndian, len(ip))
 	buffer.WriteString(ip)
 	binary.Write(buffer, binary.BigEndian, 8088)
-	if curConnNum < 10 {
+	if curConnNum < MaxTestClient {
 		buffer.WriteString("1")
 	} else {
 		buffer.WriteString("0")

@@ -11,10 +11,6 @@ import (
 	"net"
 )
 
-const (
-	Sync_Cycle_Time = 30
-)
-
 func EncodeHeartBeatRequest(curConnNum int) *bytes.Buffer {
 	buf := new(bytes.Buffer)
 	var hbeatreq HeartbeatRequest
@@ -22,7 +18,7 @@ func EncodeHeartBeatRequest(curConnNum int) *bytes.Buffer {
 	hbeatreq.Cmd = uint32(0x00000024)
 	hbeatreq.Seq = uint32(1)
 	hbeatreq.Loads[6] = uint16(curConnNum)
-	hbeatreq.Ports[6] = uint16(BandWidthPort)
+	hbeatreq.Ports[6] = uint16(BandServerPort)
 	binary.Write(buf, binary.BigEndian, hbeatreq)
 	// var msg []byte
 	// msg = buf.Bytes()

@@ -1,0 +1,7 @@
+{
+    "BandServer": "127.0.0.1:8080",
+    "HttpServer": "127.0.0.1:8080",
+	"SyncCycle"   :30,
+	"ConnTimeout" :10,
+	"MaxTestClient":10
+}
